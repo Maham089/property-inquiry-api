@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="9aa1066f-f4f3-4a98-ac9e-9cf696ec701e" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<http:listener-config name="HTTP_Listener_config1" doc:name="HTTP Listener config" doc:id="402d3514-2c6f-4475-b9a1-6a2a8f7f04e9" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+	<flow name="property-inquiry-apiFlow" doc:id="1fb98c0a-7b39-4016-af9e-75142ac9a425" >
+		<http:listener doc:name="Listener" doc:id="2d685cfe-f22b-4cda-80a5-08ac2a8d57ed" config-ref="HTTP_Listener_config1" path="/properties" allowedMethods="GET"/>
+		<ee:transform doc:name="Transform Message" doc:id="ff54e932-4acd-4340-ae23-96cf16341c4f" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[   %dw 2.0
+   output application/json
+   var properties = [
+     {id: 1, name: "Sample Villa A", city: "Abu Dhabi", price: 4500000},
+     {id: 2, name: "Sample Apartment B", city: "Abu Dhabi", price: 1200000},
+     {id: 3, name: "Sample Townhouse C", city: "Dubai", price: 2800000}
+   ]
+   var city = lower(attributes.queryParams.city default "")
+   var maxPrice = (attributes.queryParams.maxPrice default "999999999") as Number
+   ---
+   properties filter ((p) -> (city == "" or lower(p.city) == city) and p.price <= maxPrice)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="property-inquiry-apiFlow1" doc:id="edbe82b7-b639-48a8-99ea-498e95952b3e" >
+		<http:listener doc:name="Listener" doc:id="2acbdb67-c39b-4f93-a5ee-5149a119cca9" config-ref="HTTP_Listener_config1" path="/inquiries" allowedMethods="POST">    <http:response statusCode="#[vars.httpStatus default 200]"/>
+			 <http:error-response >
+				<http:body ><![CDATA[#[vars.httpStatus default 200]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<choice doc:name="Choice" doc:id="e18b70a5-7beb-4073-8cfc-1305083a49b6" >
+			<when expression='#[isEmpty(payload.propertyId default "")]'>
+				<set-variable value="#[400]" doc:name="Set Variable" doc:id="cd78aabe-1159-4a13-94cc-64e46dea3216" variableName="httpStatus"/>
+				<set-payload value='#[output application/json --- {error: "name, email and propertyId are required"}]' doc:name="Set Payload" doc:id="8184296d-5055-4da5-b3c9-c74588f0521c" />
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="97926342-953d-42ac-923a-e35eeee9fd06" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[   %dw 2.0
+   output application/json
+   ---
+   {
+     reference: "INQ-" ++ (randomInt(90000) + 10000 as String),
+     name: payload.name,
+     email: payload.email,
+     propertyId: payload.propertyId,
+     receivedAt: now()
+   }]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="4e09b083-2f20-413c-b19b-c1423568e195" message='"Inquiry received: " ++ (payload.reference default "none")'/>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
